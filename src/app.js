@@ -2,7 +2,7 @@ const path = require('path')
 const express = require('express')
 const hbs = require('hbs')
 
-const geocode = require('./utils/geocode')
+const {geocode, reverseGeocode} = require('./utils/geocode')
 const forecast = require('./utils/forecast')
 
 const app = express()
@@ -41,34 +41,55 @@ app.get('/help', (req, res) => {
 })
 
 app.get('/weather', (req, res) => {
-    if (!req.query.address) {
+    if (!req.query.address && !req.query.coords) {
         return res.send({
             error: 'No address provided, please try again!'
         })
     }
 
-    geocode(req.query.address, (error, { latitude, longitude, location } = {}) => {
-        if (error) {
-            return res.send({ error })
-        }
-
-        forecast(latitude, longitude, (error, { summary, temperature, precipitation } = {}) => {
+    if (req.query.address) {
+        geocode(req.query.address, (error, { latitude, longitude, location } = {}) => {
             if (error) {
                 return res.send({ error })
             }
 
-            res.send({
-                location,
-                address: req.query.address,
-                summary: `${summary} It is currently ${temperature} degrees outside. There is a ${precipitation}% chance of rain.` 
+            forecast(latitude, longitude, (error, { summary, temperature, precipitation } = {}) => {
+                if (error) {
+                    return res.send({ error })
+                }
+
+                res.send({
+                    location,
+                    address: req.query.address,
+                    summary: `${summary} It is currently ${temperature} degrees outside. There is a ${precipitation}% chance of rain.`
+                })
             })
         })
-    })
+    } else if (req.query.coords) {
+        const coords = req.query.coords.split(',')
+        reverseGeocode(coords, (error, {latitude, longitude, location} = {}) => {
+            if (error) {
+                return res.send({error})
+            }
+
+            forecast(latitude, longitude, (error, {summary, temperature, precipitation} = {}) => {
+                if (error) {
+                    return res.send({error})
+                }
+
+                res.send({
+                    location,
+                    address: coords,
+                    summary: `${summary} It is currently ${temperature} degrees outside. There is a ${precipitation}% chance of rain.`
+                })
+            })
+        })
+    }
 })
 
 app.get('/help/*', (req, res) => {
     res.render('not-found', {
-        title:'404',
+        title: '404',
         name: 'Larry',
         message: 'Document not found'
     })
